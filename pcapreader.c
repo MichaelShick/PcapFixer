@@ -1,5 +1,22 @@
 #include <stdio.h>
+#include <malloc.h>
 #include <string.h>
+struct pcap_convo_list
+{
+    struct pcap_frame *pcap_frame;
+    struct pcap_convo_list *next;
+};
+struct pcap_frame
+{
+    unsigned int id;
+    unsigned int seconds;
+    unsigned int microseconds;
+    unsigned int captured_length;
+    unsigned int original_length;
+    unsigned char* packet;
+    struct pcap_frame* next_timeline; // a pointer to the next packet as in arrival order
+    struct pcap_frame* next_convo; // a pointer to the next packet as in conversation order
+};
 struct ethdr
 { //
     unsigned char h_dest[6];
@@ -35,8 +52,8 @@ struct udpheader
 } __attribute__((packed));
 struct tcpheader
 {
-    short int SourcePort;
-    short int DestinationPort;
+    unsigned short int SourcePort;
+    unsigned short int DestinationPort;
     unsigned int SequenceNumber;
     unsigned int AckNumber;
     unsigned int DataOffset : 4;
@@ -69,27 +86,9 @@ char *read_file(const char *filename, long *len)
     printf("file len is %d\n", filelen);
     return buffer;
 }
-void PrintingPackets(unsigned const char *buffer)
+void printingPackets(unsigned char *buffer)
 {
-    struct ethdr *eth = (struct ethhdr *)(buffer + (4 * sizeof(int)));
-    // packet record
-    unsigned int seconds;
-    unsigned int microseconds;
-    unsigned int captured_length;
-    unsigned int original_length;
-    seconds = *((unsigned int *)buffer);
-    microseconds = *((unsigned int *)buffer + 1);
-    captured_length = *((unsigned int *)buffer + 2);
-    original_length = *((unsigned int *)buffer + 3);
-
-    printf(
-        "----------------------------------------------------------------packet----------------------------------------------------------------\n"
-        "seconds is %x\n"
-        "microseconds is %x\n"
-        "captured length is %x\n"
-        "original length is %x\n\n",
-        seconds, microseconds, captured_length, original_length);
-
+    struct ethdr *eth = (struct ethhdr *)(buffer);
     if (ntohs(eth->h_proto) == 2048)
     {
         printf("Ethernet Header \n"); // printing mac addresses in hexa
@@ -97,25 +96,24 @@ void PrintingPackets(unsigned const char *buffer)
         printf("Destination Address : %.2X-%.2X-%.2X-%.2X-%.2X-%.2X\n", eth->h_dest[0], eth->h_dest[1], eth->h_dest[2], eth->h_dest[3], eth->h_dest[4], eth->h_dest[5]);
         printf("Protocol : %x \n", htons(eth->h_proto)); // converting byte order to match protocol 0x0800
         printf("\n");
-        unsigned short iphdrlen;
-        struct iphr *iph = (struct iphr *)(buffer + (4 * sizeof(int)) + sizeof(struct ethdr));
+        struct iphr *iph = (struct iphr *)(buffer  + sizeof(struct ethdr));
         printf("IP header\n");
         printf("\t\t\t |- Version : %d\n", iph->version);
         printf("\t\t\t |- Inter Header Length : %d DWORDS or %d BYTES\n", (unsigned int)iph->ihl, (unsigned int)iph->ihl * 4);
         printf("\t\t\t |- Type Of Service : %d\n", (unsigned char)iph->TypeOfService);          // Also can be called Qos(Quality Of Service)
         printf("\t\t\t |- Total Length : %d Bytes\n", (unsigned short)ntohs(iph->TotalLength)); // Length of the datagram
-        printf("\t\t\t |- Identification : %d\n", (unsigned short)iph->Identification);         // Identification of the packet
+        printf("\t\t\t |- Identification : %d\n", (unsigned short)ntohs(iph->Identification));         // Identification of the packet
         printf("\t\t\t |- Time To Live : %d\n", (unsigned char)iph->Ttl);                       // Indicated the maximum time a data is allowed to be on the network.
         printf("\t\t\t |- Protocol : %d\n", (unsigned char)iph->Protocol);                      // Protocol of the packet
-        printf("\t\t\t |- Header Checksum : %d\n", (unsigned short)ntohs(iph->HeaderChecksum));
+        printf("\t\t\t |- Header Checksum : %x\n", (unsigned short)ntohs(iph->HeaderChecksum));
         if (iph->Protocol == 6)
         {
-            struct tcpheader *tcph = (struct tcpheader *)buffer + (4 * sizeof(int));
+            struct tcpheader *tcph = (struct tcpheader *)(buffer + (4*iph->ihl)+sizeof(struct ethdr));
             printf("\nTcp Header\n");
-            printf("\t\t\t |- Source Port\t : %d\n", (unsigned short)ntohs(tcph->SourcePort));
-            printf("\t\t\t |- Destination Port\t : %d\n", (unsigned short)ntohs(tcph->DestinationPort));
-            printf("\t\t\t |- Sequence Number\t : %d\n", (unsigned int)ntohs(tcph->SequenceNumber));
-            printf("\t\t\t |- Acknowledge Number\t : %d\n", (unsigned int)ntohs(tcph->AckNumber));
+            printf("\t\t\t |- Source Port\t : %u\n", (unsigned short)htons(tcph->SourcePort));
+            printf("\t\t\t |- Destination Port\t : %u\n", (unsigned short)htons(tcph->DestinationPort));
+            printf("\t\t\t |- Sequence Number\t : %u\n", (unsigned int)ntohs(tcph->SequenceNumber));
+            printf("\t\t\t |- Acknowledge Number\t : %u\n", (unsigned int)ntohs(tcph->AckNumber));
             printf("\t\t\t |-Header Length : %d DWORDS or %d BYTES\n", (unsigned int)tcph->DataOffset, (unsigned int)tcph->DataOffset * 4);
             printf("\n------------------------------------------------------flags------------------------------------------------------\n");
             printf("\t\t\t\t |-Urgent flag : %d\n", (unsigned int)tcph->Urg); // Printing flags, each flag represent a different purpose and it's 1 bit in size
@@ -125,7 +123,7 @@ void PrintingPackets(unsigned const char *buffer)
             printf("\t\t\t\t |-Synchronise flag : %d\n", (unsigned int)tcph->Syn);
             printf("\t\t\t\t |-Finish flag : %d\n", (unsigned int)tcph->Fin);
             printf("\t\t\t |-Window size  :%d\n", (unsigned short)ntohs(tcph->Window));
-            printf("\t\t\t |- checksum  :%d\n", (unsigned short)ntohs(tcph->Checksum));
+            printf("\t\t\t |- checksum  :%x\n", (unsigned short)ntohs(tcph->Checksum));
             printf("\t\t\t |- Urgent pointer  :%d\n", (unsigned short)ntohs(tcph->UrgentPointer));
             char *remain;
             remain = buffer + sizeof(struct ethdr) + iph->ihl * 4 + tcph->DataOffset * 4;
@@ -135,6 +133,7 @@ void PrintingPackets(unsigned const char *buffer)
                 remain++;
             }
         }
+        /* if protocol is UDP */
         if (iph->Protocol == 17)
         {
             struct udpheader *udph = (struct udpheader *)buffer + (4 * sizeof(int));
@@ -154,12 +153,13 @@ void PrintingPackets(unsigned const char *buffer)
     }
 }
 // get the packets from the pcap file, also printing it's contents.
-// int* size - fill with the pcap file's length
+// int* size - fill with the pcap file's length - not including the header
+// int* snaplen - fill with the snap length specified in the pcap file header.
 // return the pcap file's contents
 char *get_buffer(int *size)
 {
     int i;
-    const char *buffer;
+    char *buffer;
     FILE *fileptr;
     long filelen;
 
@@ -173,22 +173,21 @@ char *get_buffer(int *size)
     buffer = read_file("check.pcap", &filelen);
     // header
     magic_number = *((unsigned int *)buffer);
-    maj_value = *((unsigned short *)buffer + 2*sizeof(short));
-    min_value = *((unsigned short *)buffer + 3*sizeof(short));
-    snap_len = *((unsigned int *)buffer + 4*sizeof(int));
-    link_type = *((unsigned int *)buffer + 5*sizeof(int));
-
-    printf(
-        "----------------------------------------------------------------header----------------------------------------------------------------\n"
-        "magic number is %x\n"
-        "major value is %x\n"
-        "minor value is %x\n"
-        "snap length is %x\n"
-        "link type is %x\n\n",
+    maj_value = *((unsigned short *)buffer + 2);
+    min_value = *((unsigned short *)buffer + 3);
+    snap_len = *((unsigned int *)buffer + 4);
+    link_type = *((unsigned int *)buffer + 5);
+    printf(\
+        "----------------------------------------------------------------header----------------------------------------------------------------\n"\
+        "magic number is %x\n"\
+        "major value is %x\n"\
+        "minor value is %x\n"\
+        "snap length is %x\n"\
+        "link type is %x\n\n",\
         magic_number, maj_value, min_value, snap_len, link_type);
-    // packet
+
     buffer += 6 * sizeof(int);
     *size = (filelen - (6 * sizeof(int))); // the buffer length minus the file header
-
+    //printingPackets(buffer + 4*sizeof(int));
     return buffer;
 }
