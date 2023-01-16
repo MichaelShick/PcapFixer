@@ -1,0 +1,1 @@
+/usr/bin/cc CMakeFiles/playground.dir/playground.c.o -o playground  src/tools/libtools.a src/server-client/libserver-client.a 

@@ -1,0 +1,2 @@
+/usr/bin/ar qc libserver-client.a CMakeFiles/server-client.dir/simulation_server.c.o CMakeFiles/server-client.dir/simulator_client.c.o
+/usr/bin/ranlib libserver-client.a

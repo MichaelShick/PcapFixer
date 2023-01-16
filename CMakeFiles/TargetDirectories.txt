@@ -1,0 +1,9 @@
+/home/michael/PcapFixer/CMakeFiles/playground.dir
+/home/michael/PcapFixer/CMakeFiles/edit_cache.dir
+/home/michael/PcapFixer/CMakeFiles/rebuild_cache.dir
+/home/michael/PcapFixer/src/tools/CMakeFiles/tools.dir
+/home/michael/PcapFixer/src/tools/CMakeFiles/edit_cache.dir
+/home/michael/PcapFixer/src/tools/CMakeFiles/rebuild_cache.dir
+/home/michael/PcapFixer/src/server-client/CMakeFiles/server-client.dir
+/home/michael/PcapFixer/src/server-client/CMakeFiles/edit_cache.dir
+/home/michael/PcapFixer/src/server-client/CMakeFiles/rebuild_cache.dir
